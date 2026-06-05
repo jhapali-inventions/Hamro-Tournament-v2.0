@@ -1,0 +1,164 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // 1. Global safety net default catch-all deny rule
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // 2. Global helper functions and validators
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    // Failsafe Bootstrapped Admin using User email from runtime
+    function isAdmin() {
+      return isSignedIn() && (
+        request.auth.token.email == 'pcaayush9@gmail.com' ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin')
+      );
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    // User shape validator
+    function isValidUser(data) {
+      return data.keys().hasAll(['uid', 'email', 'username', 'wallet']) &&
+             data.uid == request.auth.uid &&
+             data.email is string &&
+             data.email.size() <= 128 &&
+             data.username is string &&
+             data.username.size() >= 2 &&
+             data.username.size() <= 64 &&
+             data.wallet is number &&
+             data.wallet >= 0 &&
+             (!data.keys().hasAny(['esewaId']) || (data.esewaId is string && data.esewaId.size() <= 64)) &&
+             (!data.keys().hasAny(['ffUid']) || (data.ffUid is string && data.ffUid.size() <= 64)) &&
+             (!data.keys().hasAny(['ffIgn']) || (data.ffIgn is string && data.ffIgn.size() <= 64));
+    }
+
+    // 3. Rules for User profiles
+    match /users/{userId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && isOwner(userId) && isValidUser(request.resource.data) && (
+        (!request.resource.data.keys().hasAll(['role']) || request.resource.data.role == 'user')
+      );
+      allow update: if (
+        isSignedIn() && isOwner(userId) && isValidUser(request.resource.data) && (
+          // Enforce role, email and uid immutability by standard users
+          (!request.resource.data.keys().hasAll(['role']) || request.resource.data.role == resource.data.role) &&
+          request.resource.data.uid == resource.data.uid &&
+          request.resource.data.email == resource.data.email &&
+          
+          // Action-Based Update pattern via strict affectedKeys checks
+          (
+            // Action A: Edit profile (username, esewaId)
+            (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['username', 'esewaId'])) ||
+            // Action B: Lock FF Player ID
+            (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['ffUid', 'ffUidLocked']) && (!resource.data.keys().hasAll(['ffUidLocked']) || !resource.data.ffUidLocked)) ||
+            // Action C: Lock FF In-Game Name
+            (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['ffIgn', 'ffIgnLocked']) && (!resource.data.keys().hasAll(['ffIgnLocked']) || !resource.data.ffIgnLocked)) ||
+            // Action D: Join Tournament (deduct entry fee from wallet and increment totalMatches)
+            (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['wallet', 'totalMatches']) && request.resource.data.wallet < resource.data.wallet) ||
+            // Action E: Lock funds during cash-out request (wallet decreases and saves esewaId receiver)
+            (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['wallet', 'esewaId']) && request.resource.data.wallet < resource.data.wallet)
+          )
+        )
+      ) || isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // 4. Rules for Tournaments
+    match /tournaments/{tournamentId} {
+      allow read: if isSignedIn();
+      allow create, update, delete: if isAdmin();
+    }
+
+    // 5. Rules for Tournament Registrations
+    match /tournamentRegistrations/{regId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && 
+                    request.resource.data.userId == request.auth.uid &&
+                    request.resource.data.tournamentId is string &&
+                    request.resource.data.tournamentId.size() <= 64 &&
+                    request.resource.data.userName is string &&
+                    request.resource.data.userName.size() <= 128 &&
+                    request.resource.data.entryFee is number;
+      // Registrations are immutable after creation on client-side
+      allow update, delete: if isAdmin();
+    }
+
+    // 6. Rules for Wallet Transactions
+    match /transactions/{txId} {
+      allow read: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isSignedIn() && 
+                    request.resource.data.userId == request.auth.uid &&
+                    request.resource.data.amount is number &&
+                    request.resource.data.amount >= 0 &&
+                    request.resource.data.type is string &&
+                    request.resource.data.type.size() <= 32 &&
+                    request.resource.data.description is string &&
+                    request.resource.data.description.size() <= 256;
+      allow update, delete: if isAdmin();
+    }
+
+    // 7. Rules for Deposits
+    match /deposits/{depId} {
+      allow read: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isSignedIn() && 
+                    request.resource.data.userId == request.auth.uid && 
+                    request.resource.data.amount is number && 
+                    request.resource.data.amount >= 50 &&
+                    request.resource.data.status == 'pending' &&
+                    request.resource.data.transactionId is string &&
+                    request.resource.data.transactionId.size() <= 128;
+      allow update, delete: if isAdmin();
+    }
+
+    // 8. Rules for Withdrawals
+    match /withdrawals/{witId} {
+      allow read: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isSignedIn() && 
+                    request.resource.data.userId == request.auth.uid && 
+                    request.resource.data.amount is number && 
+                    request.resource.data.amount >= 50 &&
+                    request.resource.data.status == 'pending' &&
+                    request.resource.data.esewaId is string && 
+                    request.resource.data.esewaId.size() == 10;
+      allow update, delete: if isAdmin();
+    }
+
+    // 9. Rules for Announcements
+    match /announcements/{annId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    // 10. Rules for Push Notifications
+    match /notifications/{notifId} {
+      allow read: if isSignedIn() && (resource.data.userId == request.auth.uid || resource.data.userId == "all");
+      allow create: if isSignedIn() && (
+        request.resource.data.userId == request.auth.uid || 
+        request.resource.data.userId == "all" ||
+        isAdmin()
+      );
+      allow update: if isSignedIn() && (
+        resource.data.userId == request.auth.uid || 
+        resource.data.userId == "all" || 
+        isAdmin()
+      );
+      allow delete: if isSignedIn() && (
+        resource.data.userId == request.auth.uid || 
+        isAdmin()
+      );
+    }
+  }
+}

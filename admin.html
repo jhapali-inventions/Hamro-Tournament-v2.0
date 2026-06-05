@@ -1,0 +1,743 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Admin Panel | Hamro Tournament</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
+  <style>
+    * { -webkit-tap-highlight-color: transparent; }
+    body { font-family: -apple-system, 'SF Pro Display', BlinkMacSystemFont, sans-serif; background: #f2f2f7; }
+    body.dark { background: #000; color: #fff; }
+    .ios-card { background: #fff; border-radius: 16px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); }
+    body.dark .ios-card { background: #1c1c1e; }
+    .ios-btn { border-radius: 12px; transition: all 0.2s; font-weight: 600; cursor: pointer; }
+    .ios-btn:active { transform: scale(0.98); }
+    .ios-input { border-radius: 10px; border: 1px solid #e5e5ea; padding: 12px 16px; width: 100%; font-size: 15px; }
+    body.dark .ios-input { background: #2c2c2e; border-color: #3a3a3c; color: white; }
+    .tab-btn.active { background: #007AFF !important; color: white !important; }
+    .spinner { width: 30px; height: 30px; border: 3px solid #e5e5ea; border-top-color: #007AFF; border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.9); color: white; padding: 10px 20px; border-radius: 25px; z-index: 9999; font-size: 14px; animation: fadeIn 0.3s ease; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateX(-50%) translateY(20px); } to { opacity: 1; transform: translateX(-50%) translateY(0); } }
+    .modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 50; align-items: center; justify-content: center; }
+    .modal.active { display: flex; }
+    .status-pending { background: #FF9500; color: white; padding: 3px 10px; border-radius: 12px; font-size: 11px; font-weight: 600; }
+    .status-completed { background: #34C759; color: white; padding: 3px 10px; border-radius: 12px; font-size: 11px; font-weight: 600; }
+    .status-rejected { background: #FF3B30; color: white; padding: 3px 10px; border-radius: 12px; font-size: 11px; font-weight: 600; }
+    .filter-btn.active { background: #007AFF20; color: #007AFF; font-weight: 600; }
+  </style>
+</head>
+<body class="p-4 bg-slate-950 text-slate-100">
+  <div class="max-w-4xl mx-auto">
+    <!-- Admin Login -->
+    <div id="admin-login" class="ios-card bg-slate-900 border border-slate-800 p-6 max-w-md mx-auto mt-10">
+      <div class="text-center mb-6">
+        <div class="w-16 h-16 bg-gradient-to-r from-[#007AFF] to-[#AF52DE] rounded-2xl flex items-center justify-center mx-auto mb-3 shadow-lg">
+          <span class="text-2xl">🔐</span>
+        </div>
+        <h2 class="text-xl font-bold text-white">Admin Dashboard</h2>
+        <p class="text-xs text-slate-400">Hamro Tournament Management</p>
+      </div>
+      <input type="email" id="admin-email" placeholder="Admin Email" class="ios-input bg-slate-950 border-slate-850 text-white mb-3" required>
+      <input type="password" id="admin-pass" placeholder="Password" class="ios-input bg-slate-950 border-slate-850 text-white mb-4" required>
+      <button id="btn-admin-login" class="ios-btn w-full py-3 bg-[#007AFF] hover:bg-[#0066d6] text-white font-bold transition">Login</button>
+      <p id="login-error" class="text-red-500 text-xs mt-2 text-center hidden"></p>
+    </div>
+
+    <!-- Admin Dashboard -->
+    <div id="admin-dashboard" class="hidden space-y-4">
+      <div class="flex justify-between items-center mb-2">
+        <div class="flex items-center gap-2">
+          <div class="w-8 h-8 bg-[#007AFF] rounded-lg flex items-center justify-center text-white font-bold">⚙️</div>
+          <h1 class="font-bold text-lg text-white">Admin Control</h1>
+        </div>
+        <div class="flex items-center gap-2">
+          <a href="/" class="ios-btn px-3 py-1.5 text-xs bg-slate-800 text-slate-200 hover:bg-slate-750 rounded-lg no-underline transition flex items-center">← Main Panel</a>
+          <button id="btn-logout" class="ios-btn px-3 py-1.5 text-xs bg-red-600 hover:bg-red-500 text-white rounded-lg transition">Logout</button>
+        </div>
+      </div>
+
+      <!-- Stats -->
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+        <div class="ios-card bg-slate-900 border border-slate-800 p-3 text-center"><div class="text-xl font-bold text-blue-400" id="stat-users">0</div><div class="text-xs text-slate-400">Users</div></div>
+        <div class="ios-card bg-slate-900 border border-slate-800 p-3 text-center"><div class="text-xl font-bold text-green-400" id="stat-deposits">0</div><div class="text-xs text-slate-400">Pending Dep</div></div>
+        <div class="ios-card bg-slate-900 border border-slate-800 p-3 text-center"><div class="text-xl font-bold text-orange-400" id="stat-withdrawals">0</div><div class="text-xs text-slate-400">Pending Wit</div></div>
+        <div class="ios-card bg-slate-900 border border-slate-800 p-3 text-center"><div class="text-xl font-bold text-purple-400" id="stat-tournaments">0</div><div class="text-xs text-slate-400">Active Tourneys</div></div>
+      </div>
+
+      <!-- Tabs -->
+      <div class="flex gap-2 overflow-x-auto pb-2">
+        <button class="tab-btn ios-btn px-4 py-2 rounded-xl bg-slate-800 text-slate-200 transition" data-tab="dashboard">📊 Overview</button>
+        <button class="tab-btn ios-btn px-4 py-2 rounded-xl bg-slate-800 text-slate-200 transition" data-tab="users">👥 Users</button>
+        <button class="tab-btn ios-btn px-4 py-2 rounded-xl bg-slate-800 text-slate-200 transition" data-tab="tournaments">🏆 Tournaments</button>
+        <button class="tab-btn ios-btn px-4 py-2 rounded-xl bg-slate-800 text-slate-200 transition" data-tab="deposits">💰 Deposits</button>
+        <button class="tab-btn ios-btn px-4 py-2 rounded-xl bg-slate-800 text-slate-200 transition" data-tab="withdrawals">💸 Withdrawals</button>
+        <button class="tab-btn ios-btn px-4 py-2 rounded-xl bg-slate-800 text-slate-200 transition" data-tab="notifications">🔔 Notify</button>
+      </div>
+
+      <!-- Overview Tab -->
+      <div id="tab-dashboard" class="tab-content space-y-3">
+        <div class="ios-card bg-slate-900 border border-slate-800 p-4">
+          <h3 class="font-bold mb-2 text-white">⚡ Quick Actions</h3>
+          <div class="grid grid-cols-2 gap-3">
+            <button onclick="switchTab('tournaments')" class="ios-btn bg-purple-600 hover:bg-purple-500 text-white py-2.5 rounded-xl text-sm transition">🏆 Create Tournament</button>
+            <button onclick="switchTab('deposits')" class="ios-btn bg-green-600 hover:bg-green-500 text-white py-2.5 rounded-xl text-sm transition">✅ Approve Deposits</button>
+            <button onclick="switchTab('notifications')" class="ios-btn bg-blue-600 hover:bg-blue-500 text-white py-2.5 rounded-xl text-sm transition">📢 Send Alert</button>
+            <button onclick="switchTab('withdrawals')" class="ios-btn bg-orange-600 hover:bg-orange-500 text-white py-2.5 rounded-xl text-sm transition">💸 Process Withdrawals</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Users Tab -->
+      <div id="tab-users" class="tab-content hidden">
+        <div class="ios-card bg-slate-900 border border-slate-800 p-4 mb-3">
+          <input type="text" id="user-search" placeholder="Search by Email or UID" class="ios-input bg-slate-950 border-slate-850 text-white mb-2">
+          <button id="btn-search-user" class="ios-btn w-full py-2 bg-[#007AFF] hover:bg-[#0066d6] text-white transition">Search Users</button>
+        </div>
+        <div id="users-list" class="space-y-3">
+          <div class="spinner"></div>
+        </div>
+      </div>
+
+      <!-- Tournaments Tab -->
+      <div id="tab-tournaments" class="tab-content hidden">
+        <!-- Create Form -->
+        <div class="ios-card bg-slate-900 border border-slate-800 p-4 mb-4">
+          <h3 class="font-bold mb-3 text-white">🏆 Create New Tournament</h3>
+          <form id="create-tournament-form" class="space-y-3">
+            <input type="text" id="t-title" placeholder="Tournament Title" class="ios-input bg-slate-950 border-slate-855 text-white" required>
+            <div class="grid grid-cols-2 gap-3">
+              <input type="text" id="t-banner" placeholder="Banner Image URL" class="ios-input bg-slate-950 border-slate-855 text-white" required>
+              <input type="text" id="t-id-display" placeholder="Auto-ID (HT-...)" class="ios-input bg-slate-950 border-slate-855 text-white disabled" disabled>
+            </div>
+            <div class="grid grid-cols-3 gap-3">
+              <input type="number" id="t-entry" placeholder="Entry Fee" class="ios-input bg-slate-950 border-slate-855 text-white" required>
+              <input type="number" id="t-prize" placeholder="Prize Pool" class="ios-input bg-slate-950 border-slate-855 text-white" required>
+              <input type="number" id="t-max" placeholder="Max Players" class="ios-input bg-slate-950 border-slate-855 text-white" value="50" required>
+            </div>
+            <input type="datetime-local" id="t-start" class="ios-input bg-slate-950 border-slate-855 text-white" required>
+            
+            <details class="ios-card bg-slate-950 border border-slate-850 p-3 rounded-xl">
+              <summary class="font-semibold cursor-pointer text-slate-300">📜 Rules & Instructions (Expand)</summary>
+              <div class="space-y-2 mt-2">
+                <textarea id="t-rules" placeholder="Tournament Rules" class="ios-input bg-slate-900 border-slate-850 text-white h-20"></textarea>
+                <textarea id="t-prize-dist" placeholder="Prize Distribution (e.g., 1st: 60%, 2nd: 30%, 3rd: 10%)" class="ios-input bg-slate-900 border-slate-850 text-white h-20"></textarea>
+                <textarea id="t-instructions" placeholder="Instructions Before Joining" class="ios-input bg-slate-900 border-slate-850 text-white h-20"></textarea>
+                <textarea id="t-prohibited" placeholder="Prohibited Behaviors" class="ios-input bg-slate-900 border-slate-850 text-white h-20"></textarea>
+                <textarea id="t-tips" placeholder="Important Tips" class="ios-input bg-slate-900 border-slate-850 text-white h-20"></textarea>
+              </div>
+            </details>
+            <button type="submit" class="ios-btn w-full py-3 bg-[#34C759] hover:bg-emerald-500 text-white font-bold transition">Create Tournament</button>
+          </form>
+        </div>
+        <!-- Manage Tournaments -->
+        <div class="ios-card bg-slate-900 border border-slate-800 p-4">
+          <h3 class="font-bold mb-3 text-white">Manage Tournaments</h3>
+          <div id="tournaments-manage-list" class="space-y-3">
+            <div class="spinner"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Deposits Tab -->
+      <div id="tab-deposits" class="tab-content hidden">
+        <div class="flex gap-2 mb-3 overflow-x-auto pb-1">
+          <button class="filter-btn ios-btn px-3 py-1 rounded-lg text-sm bg-slate-800 text-white active" data-status="pending">Pending</button>
+          <button class="filter-btn ios-btn px-3 py-1 rounded-lg text-sm bg-slate-800 text-slate-400" data-status="completed">Completed</button>
+          <button class="filter-btn ios-btn px-3 py-1 rounded-lg text-sm bg-slate-800 text-slate-400" data-status="rejected">Rejected</button>
+          <button class="filter-btn ios-btn px-3 py-1 rounded-lg text-sm bg-slate-800 text-slate-400" data-status="all">All History</button>
+        </div>
+        <div id="deposits-list" class="space-y-3">
+          <div class="spinner"></div>
+        </div>
+      </div>
+
+      <!-- Withdrawals Tab -->
+      <div id="tab-withdrawals" class="tab-content hidden">
+        <div class="flex gap-2 mb-3 overflow-x-auto pb-1">
+          <button class="filter-btn ios-btn px-3 py-1 rounded-lg text-sm bg-slate-800 text-white active" data-status="pending">Pending</button>
+          <button class="filter-btn ios-btn px-3 py-1 rounded-lg text-sm bg-slate-800 text-slate-400" data-status="completed">Completed</button>
+          <button class="filter-btn ios-btn px-3 py-1 rounded-lg text-sm bg-slate-800 text-slate-400" data-status="rejected">Rejected</button>
+          <button class="filter-btn ios-btn px-3 py-1 rounded-lg text-sm bg-slate-800 text-slate-400" data-status="all">All History</button>
+        </div>
+        <div id="withdrawals-list" class="space-y-3">
+          <div class="spinner"></div>
+        </div>
+      </div>
+
+      <!-- Notifications Tab -->
+      <div id="tab-notifications" class="tab-content hidden">
+        <div class="ios-card bg-slate-900 border border-slate-800 p-4">
+          <h3 class="font-bold mb-3 text-white">📢 Send In-App Notification</h3>
+          <form id="notify-form" class="space-y-3">
+            <select id="notify-target" class="ios-input bg-slate-950 border-slate-855 text-white">
+              <option value="all">🌍 All Users</option>
+              <option value="specific">👤 Specific User (by UID)</option>
+            </select>
+            <input type="text" id="notify-uid" placeholder="Enter User UID" class="ios-input bg-slate-950 border-slate-855 text-white hidden">
+            <input type="text" id="notify-title" placeholder="Notification Title" class="ios-input bg-slate-950 border-slate-855 text-white" required>
+            <textarea id="notify-msg" placeholder="Message" class="ios-input bg-slate-950 border-slate-855 text-white h-24" required></textarea>
+            <button type="submit" class="ios-btn w-full py-3 bg-[#007AFF] hover:bg-[#0066d6] text-white font-bold transition">Send Notification</button>
+          </form>
+        </div>
+        <div id="notification-history" class="mt-4 ios-card bg-slate-900 border border-slate-800 p-4 animate-in fade-in duration-200">
+          <h3 class="font-bold mb-2 text-white">Recent Notifications Sent</h3>
+          <div id="notify-history-list" class="space-y-2 text-sm text-slate-300"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modals -->
+  <!-- Wallet Adjust Modal -->
+  <div id="walletModal" class="modal">
+    <div class="ios-card bg-slate-900 border border-slate-800 p-5 w-full max-w-sm mx-4">
+      <h3 class="font-bold mb-2 text-white">💰 Adjust User Wallet</h3>
+      <p id="wallet-modal-user" class="text-xs text-slate-400 mb-3"></p>
+      <input type="number" id="wallet-amount" placeholder="Amount (+ to add, - to deduct)" class="ios-input bg-slate-950 border-slate-850 text-white mb-3">
+      <div class="flex gap-2">
+        <button onclick="confirmWalletAdjust()" class="ios-btn bg-[#34C759] text-white flex-1 py-2 font-bold cursor-pointer hover:bg-emerald-500 transition">Confirm</button>
+        <button onclick="closeWalletModal()" class="ios-btn bg-slate-800 text-slate-200 flex-1 py-2 font-bold cursor-pointer hover:bg-slate-755 transition">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Room ID Modal -->
+  <div id="roomModal" class="modal">
+    <div class="ios-card bg-slate-900 border border-slate-850 p-5 w-full max-w-sm mx-4">
+      <h3 class="font-bold mb-2 text-white">🎮 Distribute Room Credentials</h3>
+      <p id="room-modal-title" class="text-xs text-slate-400 mb-3"></p>
+      <input type="text" id="room-id" placeholder="Room ID" class="ios-input bg-slate-950 border-slate-850 text-white mb-2">
+      <input type="text" id="room-pass" placeholder="Room Password" class="ios-input bg-slate-950 border-slate-850 text-white mb-2">
+      <select id="room-map" class="ios-input bg-slate-950 border-slate-850 text-white mb-2">
+        <option>Bermuda</option>
+        <option>Kalahari</option>
+        <option>Purgatory</option>
+      </select>
+      <button onclick="sendRoomCredentials()" class="ios-btn bg-[#007AFF] hover:bg-[#0066d6] text-white w-full py-2 font-bold transition">Send to Players</button>
+      <button onclick="closeRoomModal()" class="ios-btn w-full py-2 mt-2 bg-slate-800 text-slate-300 hover:bg-slate-750 transition font-bold">Close</button>
+    </div>
+  </div>
+
+  <script>
+    // =========================
+    // Firebase Config
+    // =========================
+    const firebaseConfig = {
+      apiKey: "AIzaSyAPEWF1t1YKFG2-hrzY7IWBaumM4xyLwOs",
+      authDomain: "hamro-tournament-09.firebaseapp.com",
+      databaseURL: "https://hamro-tournament-09-default-rtdb.asia-southeast1.firebasedatabase.app",
+      projectId: "hamro-tournament-09",
+      storageBucket: "hamro-tournament-09.firebasestorage.app",
+      messagingSenderId: "167377472023",
+      appId: "1:167377472023:web:ef825e192f564c5ccdea52"
+    };
+
+    firebase.initializeApp(firebaseConfig);
+    const auth = firebase.auth();
+    const db = firebase.firestore();
+
+    let currentAdmin = null;
+    let selectedUserId = null;
+    let selectedTournamentId = null;
+
+    // =========================
+    // Helpers
+    // =========================
+    function showToast(msg, type = 'success') {
+      const t = document.createElement('div');
+      t.className = 'toast';
+      t.style.background = type === 'error' ? '#FF3B30' : '#34C759';
+      t.textContent = msg;
+      document.body.appendChild(t);
+      setTimeout(() => t.remove(), 2500);
+    }
+
+    function formatTime(ts) {
+      if (!ts) return 'N/A';
+      const d = ts.toDate ? ts.toDate() : new Date(ts);
+      return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+    }
+
+    window.switchTab = (tab) => {
+      document.querySelectorAll('.tab-btn').forEach(b => {
+        b.classList.remove('active', 'bg-[#007AFF]', 'text-white');
+        b.classList.add('bg-slate-850', 'text-slate-400');
+      });
+      document.querySelectorAll('.tab-content').forEach(c => c.classList.add('hidden'));
+      const targetBtn = document.querySelector(`.tab-btn[data-tab="${tab}"]`);
+      if (targetBtn) {
+        targetBtn.classList.add('active', 'bg-[#007AFF]', 'text-white');
+        targetBtn.classList.remove('bg-slate-850', 'text-slate-400');
+      }
+      document.getElementById(`tab-${tab}`).classList.remove('hidden');
+      if (tab === 'users') loadUsers();
+      if (tab === 'tournaments') loadManageTournaments();
+      if (tab === 'deposits') loadTransactions('deposits', 'pending');
+      if (tab === 'withdrawals') loadTransactions('withdrawals', 'pending');
+      if (tab === 'notifications') loadNotifyHistory();
+    };
+
+    // Tab & Filter Listeners
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+      btn.onclick = () => window.switchTab(btn.dataset.tab);
+    });
+    document.querySelectorAll('.filter-btn').forEach(btn => {
+      btn.onclick = () => {
+        btn.parentElement.querySelectorAll('.filter-btn').forEach(b => {
+          b.classList.remove('active', 'bg-[#007AFF20]', 'text-[#007AFF]', 'font-semibold');
+          b.classList.add('bg-slate-800', 'text-slate-400');
+        });
+        btn.classList.add('active', 'bg-[#007AFF20]', 'text-[#007AFF]', 'font-semibold');
+        btn.classList.remove('bg-slate-800', 'text-slate-400');
+        const collection = btn.closest('#tab-deposits') ? 'deposits' : 'withdrawals';
+        loadTransactions(collection, btn.dataset.status);
+      };
+    });
+
+    document.getElementById('notify-target').onchange = (e) => {
+      document.getElementById('notify-uid').classList.toggle('hidden', e.target.value !== 'specific');
+    };
+
+    // =========================
+    // Auth & Access
+    // =========================
+    document.getElementById('btn-admin-login').onclick = async () => {
+      const email = document.getElementById('admin-email').value;
+      const pass = document.getElementById('admin-pass').value;
+      const errEl = document.getElementById('login-error');
+      errEl.classList.add('hidden');
+      try {
+        const cred = await auth.signInWithEmailAndPassword(email, pass);
+        const uDoc = await db.collection('users').doc(cred.user.uid).get();
+        if (!uDoc.exists || uDoc.data().role !== 'admin') {
+          await auth.signOut();
+          errEl.textContent = 'Access denied: Admin role required';
+          errEl.classList.remove('hidden');
+          return;
+        }
+        currentAdmin = cred.user;
+        document.getElementById('admin-login').classList.add('hidden');
+        document.getElementById('admin-dashboard').classList.remove('hidden');
+        loadStats();
+        showToast('Welcome, Admin!');
+        window.switchTab('dashboard');
+      } catch (e) {
+        errEl.textContent = e.message;
+        errEl.classList.remove('hidden');
+      }
+    };
+
+    document.getElementById('btn-logout').onclick = () => auth.signOut().then(() => location.reload());
+
+    auth.onAuthStateChanged(async (user) => {
+      if (user) {
+        const uDoc = await db.collection('users').doc(user.uid).get();
+        if (uDoc.exists && uDoc.data()?.role === 'admin') {
+          currentAdmin = user;
+          document.getElementById('admin-login').classList.add('hidden');
+          document.getElementById('admin-dashboard').classList.remove('hidden');
+          loadStats();
+          window.switchTab('dashboard');
+        } else {
+          auth.signOut();
+        }
+      }
+    });
+
+    // =========================
+    // Stats
+    // =========================
+    async function loadStats() {
+      try {
+        const [users, dep, wit, tour] = await Promise.all([
+          db.collection('users').get().then(s => s.size),
+          db.collection('deposits').where('status', '==', 'pending').get().then(s => s.size),
+          db.collection('withdrawals').where('status', '==', 'pending').get().then(s => s.size),
+          db.collection('tournaments').where('status', 'in', ['upcoming', 'playing']).get().then(s => s.size)
+        ]);
+        document.getElementById('stat-users').textContent = users || 0;
+        document.getElementById('stat-deposits').textContent = dep || 0;
+        document.getElementById('stat-withdrawals').textContent = wit || 0;
+        document.getElementById('stat-tournaments').textContent = tour || 0;
+      } catch (e) {
+        console.error("Error loading stats", e);
+      }
+    }
+
+    // =========================
+    // Users Management
+    // =========================
+    async function loadUsers() {
+      const list = document.getElementById('users-list');
+      list.innerHTML = '<div class="spinner"></div>';
+      try {
+        const snap = await db.collection('users').orderBy('createdAt', 'desc').limit(50).get();
+        list.innerHTML = '';
+        if (snap.empty) { list.innerHTML = '<p class="text-center text-slate-500 py-4">No users found</p>'; return; }
+        snap.forEach(doc => {
+          const u = doc.data();
+          list.innerHTML += `
+            <div class="ios-card bg-slate-900 border border-slate-850 p-4 flex justify-between items-center my-1 hover:border-slate-750 transition duration-150">
+              <div>
+                <div class="font-bold text-sm text-slate-100">${u.username || u.email}</div>
+                <div class="text-xs text-slate-400">UID: ${doc.id.slice(0,10)}...</div>
+                <div class="text-xs text-green-400 font-extrabold mt-1">💰 Wallet: ₹${u.wallet || 0}</div>
+              </div>
+              <button onclick="openWalletModal('${doc.id}', '${u.username || u.email}')" class="ios-btn bg-blue-600 hover:bg-blue-500 text-white font-extrabold px-3 py-1.5 text-xs rounded-lg transition">Adjust Wallet</button>
+            </div>`;
+        });
+      } catch (e) { list.innerHTML = `<p class="text-red-500 text-sm">Error: ${e.message}</p>`; }
+    }
+
+    document.getElementById('btn-search-user').onclick = async () => {
+      const q = document.getElementById('user-search').value.trim();
+      const list = document.getElementById('users-list');
+      list.innerHTML = '<div class="spinner"></div>';
+      try {
+        let res;
+        if (q.length > 15) {
+          res = await db.collection('users').doc(q).get();
+          if (!res.exists) { list.innerHTML = '<p class="text-center text-slate-500 py-4">User not found</p>'; return; }
+          const u = res.data();
+          renderSingleSearch(res.id, u);
+        } else {
+          res = await db.collection('users').where('email', '==', q.toLowerCase()).limit(1).get();
+          if (res.empty) { list.innerHTML = '<p class="text-center text-slate-500 py-4">User not found</p>'; return; }
+          const doc = res.docs[0]; const u = doc.data();
+          renderSingleSearch(doc.id, u);
+        }
+      } catch(e) { list.innerHTML = `<p class="text-red-500 text-sm">Error: ${e.message}</p>`; }
+    };
+
+    function renderSingleSearch(id, u) {
+      const list = document.getElementById('users-list');
+      list.innerHTML = `
+        <div class="ios-card bg-slate-900 border border-slate-800 p-4">
+          <div class="font-bold text-slate-100 text-base mb-1">${u.username}</div>
+          <div class="text-xs text-slate-400 mb-3">${u.email} | UID: ${id}</div>
+          <div class="grid grid-cols-2 gap-2 text-sm bg-slate-950 p-3 rounded-lg border border-slate-850">
+            <div class="font-semibold text-slate-300">💰 Wallet: <span class="text-green-400 font-bold">₹${u.wallet}</span></div>
+            <div class="font-semibold text-slate-300">🎮 FF UID: <span class="text-blue-400 font-bold">${u.ffUid || '-'}</span></div>
+            <div class="font-semibold text-slate-300">📱 eSewa: <span class="text-amber-400 font-bold">${u.esewaId || '-'}</span></div>
+            <div class="font-semibold text-slate-300">🏆 Wins: <span class="text-pink-400 font-bold">${u.totalWins || 0}</span></div>
+          </div>
+          <button onclick="openWalletModal('${id}', '${u.username}')" class="ios-btn bg-blue-600 hover:bg-blue-500 text-white w-full mt-3 py-2 text-xs font-bold transition">Adjust Wallet</button>
+        </div>`;
+    }
+
+    window.openWalletModal = (uid, name) => { selectedUserId = uid; document.getElementById('wallet-modal-user').textContent = name; document.getElementById('walletModal').classList.add('active'); document.getElementById('wallet-amount').value = ''; };
+    window.closeWalletModal = () => document.getElementById('walletModal').classList.remove('active');
+    window.confirmWalletAdjust = async () => {
+      const amt = parseInt(document.getElementById('wallet-amount').value);
+      if (!amt) return showToast('Enter amount', 'error');
+      try {
+        await db.collection('users').doc(selectedUserId).update({ wallet: firebase.firestore.FieldValue.increment(amt) });
+        await db.collection('transactions').add({ userId: selectedUserId, amount: Math.abs(amt), type: amt > 0 ? 'credit' : 'debit', description: `Admin Wallet Adjustment (${amt > 0 ? 'Added' : 'Deducted'})`, status: 'completed', createdAt: firebase.firestore.FieldValue.serverTimestamp() });
+        showToast('Wallet updated');
+        closeWalletModal();
+        loadUsers(); loadStats();
+      } catch(e) { showToast('Error: ' + e.message, 'error'); }
+    };
+
+    // =========================
+    // Tournaments
+    // =========================
+    document.getElementById('create-tournament-form').onsubmit = async (e) => {
+      e.preventDefault();
+      const tid = 'HT-' + Date.now().toString(36).toUpperCase();
+      document.getElementById('t-id-display').value = tid;
+      try {
+        await db.collection('tournaments').add({
+          tournamentId: tid,
+          title: document.getElementById('t-title').value,
+          bannerUrl: document.getElementById('t-banner').value,
+          entryFee: parseInt(document.getElementById('t-entry').value),
+          prizePool: parseInt(document.getElementById('t-prize').value),
+          maxPlayers: parseInt(document.getElementById('t-max').value),
+          startTime: new Date(document.getElementById('t-start').value),
+          status: 'upcoming',
+          rules: document.getElementById('t-rules').value,
+          prizeDist: document.getElementById('t-prize-dist').value,
+          instructions: document.getElementById('t-instructions').value,
+          prohibited: document.getElementById('t-prohibited').value,
+          tips: document.getElementById('t-tips').value,
+          currentPlayers: 0,
+          createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+          createdBy: currentAdmin.uid
+        });
+
+        // Push standard dispatch notification as per design rule
+        await db.collection('notifications').add({
+          userId: "all",
+          title: `🏆 New Elite Cup: ${document.getElementById('t-title').value}`,
+          body: `Registrations are open now. Entry fee: ₹${document.getElementById('t-entry').value}, Prize Pool: ₹${document.getElementById('t-prize').value}. Grab slots!`,
+          type: "announcement",
+          isRead: false,
+          createdAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+
+        showToast('Tournament created! 🎉');
+        e.target.reset();
+        loadManageTournaments(); loadStats();
+      } catch(e) { showToast('Error: ' + e.message, 'error'); }
+    };
+
+    async function loadManageTournaments() {
+      const list = document.getElementById('tournaments-manage-list');
+      list.innerHTML = '<div class="spinner"></div>';
+      try {
+        const snap = await db.collection('tournaments').orderBy('createdAt', 'desc').limit(15).get();
+        list.innerHTML = '';
+        if (snap.empty) { list.innerHTML = '<p class="text-center text-slate-500">No tournaments</p>'; return; }
+        snap.forEach(docSnap => {
+          const t = docSnap.data();
+          const docId = docSnap.id;
+          list.innerHTML += `
+            <div class="ios-card bg-slate-900 border border-slate-850 p-4 rounded-xl my-2">
+              <div class="flex justify-between items-start">
+                <div>
+                  <div class="font-bold text-slate-100 text-sm">${t.title}</div>
+                  <div class="text-xs text-slate-400 mt-0.5">ID: ${t.tournamentId} | ${t.currentPlayers || 0}/${t.maxPlayers} joined</div>
+                  <div class="text-[10px] text-slate-500 mt-1">Start: ${formatTime(t.startTime)}</div>
+                </div>
+                <span class="status-${t.status === 'upcoming' ? 'pending' : t.status === 'playing' ? 'completed' : 'rejected'} uppercase text-[9px] font-black">${t.status}</span>
+              </div>
+              <div class="flex gap-2 mt-3.5 flex-wrap">
+                ${t.status === 'upcoming' ? `
+                  <button onclick="openRoomModal('${docId}', '${t.title}')" class="ios-btn bg-[#007AFF] hover:bg-[#0066d6] text-white px-3 py-1.5 text-xs rounded-lg transition flex items-center gap-1">🎮 Set Room</button>
+                  <button onclick="updateTStatus('${docId}', 'playing', '${t.title}')" class="ios-btn bg-purple-600 hover:bg-purple-500 text-white px-3 py-1.5 text-xs rounded-lg transition flex items-center gap-1">▶ Start</button>
+                ` : ''}
+                ${t.status === 'playing' ? `
+                  <div class="flex gap-1.5 mt-1 items-center w-full">
+                    <input type="text" id="win-${docId}" placeholder="Winner Nickname" class="ios-input bg-slate-950 border-slate-800 text-white py-1.5 text-[10px] flex-grow max-w-[180px]">
+                    <button onclick="endTournamentWithWinner('${docId}', '${t.title}')" class="ios-btn bg-[#34C759] hover:bg-emerald-500 text-white px-3 py-1.5 text-xs rounded-lg transition">✅ End</button>
+                  </div>
+                ` : ''}
+                ${t.status === 'ended' ? `
+                  <span class="bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 px-3 py-1 text-xs rounded-lg font-black uppercase text-[10px]">🏆 Winner: ${t.winnerName || 'Declared'}</span>
+                ` : ''}
+                <button onclick="deleteTournament('${docId}')" class="ios-btn bg-red-600 hover:bg-red-500 text-white px-3 py-1.5 text-xs rounded-lg transition ml-auto">🗑️ Delete</button>
+              </div>
+            </div>`;
+        });
+      } catch(e) { list.innerHTML = `<p class="text-red-500 text-sm">Error: ${e.message}</p>`; }
+    }
+
+    window.openRoomModal = (tid, title) => { selectedTournamentId = tid; document.getElementById('room-modal-title').textContent = title; document.getElementById('roomModal').classList.add('active'); };
+    window.closeRoomModal = () => document.getElementById('roomModal').classList.remove('active');
+    window.sendRoomCredentials = async () => {
+      const roomId = document.getElementById('room-id').value.trim();
+      const roomPass = document.getElementById('room-pass').value.trim();
+      const map = document.getElementById('room-map').value;
+      if (!roomId || !roomPass) return showToast('Enter Room ID & Password', 'error');
+      try {
+        await db.collection('tournaments').doc(selectedTournamentId).update({ roomId, roomPass, map, roomDistributedAt: firebase.firestore.FieldValue.serverTimestamp() });
+        const regs = await db.collection('tournamentRegistrations').where('tournamentId', '==', selectedTournamentId).get();
+        const batch = db.batch();
+        regs.forEach(r => { batch.update(r.ref, { roomId, roomPass, map, notified: true }); });
+        await batch.commit();
+
+        // Push standard room coordinate notifications
+        await db.collection('notifications').add({
+          title: '🎮 Room Ready!',
+          body: `Join Match. Map: ${map} | ID: ${roomId} | Pass: ${roomPass}`,
+          userId: "all",
+          type: 'general',
+          isRead: false,
+          createdAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+
+        showToast('Room sent to all registered players!');
+        closeRoomModal();
+      } catch(e) { showToast('Error: ' + e.message, 'error'); }
+    };
+
+    window.updateTStatus = async (tid, status, title) => {
+      if (!confirm(`Set tournament to "${status}"?`)) return;
+      try {
+        await db.collection('tournaments').doc(tid).update({ status });
+        
+        if (status === "playing") {
+          // Push start trigger notification to participants
+          const regs = await db.collection('tournamentRegistrations').where('tournamentId', '==', tid).get();
+          const batch = db.batch();
+          regs.forEach(regSnap => {
+            const reg = regSnap.data();
+            const notificationRef = db.collection('notifications').doc();
+            batch.set(notificationRef, {
+              userId: reg.userId,
+              title: `⚔️ ${title} Starting!`,
+              body: `Lobby preparing! Your registered match "${title}" is about to begin. Open Free Fire now!`,
+              type: "start",
+              isRead: false,
+              createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+              referenceId: tid
+            });
+          });
+          await batch.commit();
+        }
+
+        showToast(`Tournament ${status}`);
+        loadManageTournaments(); loadStats();
+      } catch(err) {
+        showToast('Error: ' + err.message, 'error');
+      }
+    };
+
+    window.endTournamentWithWinner = async (tid, title) => {
+      const winnerName = document.getElementById(`win-${tid}`).value.trim();
+      if (!winnerName) {
+        showToast("Please specify the Winner Name before closing match", "error");
+        return;
+      }
+      try {
+        await db.collection('tournaments').doc(tid).update({
+          status: 'ended',
+          winnerName: winnerName
+        });
+
+        // Notify registered participants of match end
+        const regs = await db.collection('tournamentRegistrations').where('tournamentId', '==', tid).get();
+        const batch = db.batch();
+        regs.forEach(regSnap => {
+          const reg = regSnap.data();
+          const notificationRef = db.collection('notifications').doc();
+          batch.set(notificationRef, {
+            userId: reg.userId,
+            title: `🏆 Match Results Published!`,
+            body: `Results for tournament "${title}" are official. Ultimate Victor: ${winnerName}!`,
+            type: "results",
+            isRead: false,
+            createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+            referenceId: tid
+          });
+        });
+        await batch.commit();
+
+        showToast(`Tournament ended. Winner certified: ${winnerName}`);
+        loadManageTournaments(); loadStats();
+      } catch(err) {
+        showToast('Error: ' + err.message, 'error');
+      }
+    };
+
+    window.deleteTournament = async (tid) => {
+      if (!confirm('Delete this tournament permanently?')) return;
+      await db.collection('tournaments').doc(tid).delete();
+      showToast('Tournament deleted');
+      loadManageTournaments(); loadStats();
+    };
+
+    // =========================
+    // Deposits & Withdrawals
+    // =========================
+    async function loadTransactions(collectionName, statusFilter) {
+      const listId = collectionName === 'deposits' ? 'deposits-list' : 'withdrawals-list';
+      const list = document.getElementById(listId);
+      list.innerHTML = '<div class="spinner"></div>';
+      try {
+        let q = db.collection(collectionName);
+        if (statusFilter !== 'all') q = q.where('status', '==', statusFilter);
+        const snap = await q.orderBy('createdAt', 'desc').limit(30).get();
+        list.innerHTML = '';
+        if (snap.empty) { list.innerHTML = '<p class="text-center text-slate-500 py-4">No records found</p>'; return; }
+        snap.forEach(doc => {
+          const d = doc.data();
+          const isDep = collectionName === 'deposits';
+          const actionBtns = d.status === 'pending' ? `
+            <button onclick="processTransaction('${collectionName}', '${doc.id}', '${d.userId}', ${d.amount}, 'approved')" class="ios-btn bg-[#34C759] hover:bg-emerald-500 text-white px-3 py-1.5 text-xs rounded-lg transition font-extrabold flex items-center gap-1 shadow-sm">Approve</button>
+            <button onclick="processTransaction('${collectionName}', '${doc.id}', '${d.userId}', ${d.amount}, 'rejected')" class="ios-btn bg-red-600 hover:bg-red-500 text-white px-3 py-1.5 text-xs rounded-lg transition font-extrabold flex items-center gap-1 shadow-sm">Reject</button>
+          ` : `<span class="text-xs text-slate-500 uppercase font-black tracking-wider bg-slate-950 px-2 py-1 rounded border border-slate-850">${d.status}</span>`;
+          
+          list.innerHTML += `
+            <div class="ios-card bg-slate-900 border border-slate-850 p-4 flex justify-between items-center my-1">
+              <div class="flex-1">
+                <div class="font-bold text-sm text-slate-100">₹${d.amount} ${isDep ? '' : `→ ${d.esewaId || 'eSewa'}`}</div>
+                <div class="text-[10px] text-slate-400 mt-1">${isDep ? `Txn Info: ${d.transactionId || 'None'}` : `User uid: ${d.userId.slice(0,10)}`}</div>
+                <div class="text-[9px] text-slate-500 mt-0.5">${formatTime(d.createdAt)}</div>
+              </div>
+              <div class="flex gap-2">${actionBtns}</div>
+            </div>`;
+        });
+      } catch(e) { list.innerHTML = `<p class="text-red-500 text-sm">Error: ${e.message}</p>`; }
+    }
+
+    window.processTransaction = async (col, docId, uid, amt, status) => {
+      if (!confirm(`${status === 'approved' ? 'Approve' : 'Reject'} ₹${amt}?`)) return;
+      try {
+        await db.collection(col).doc(docId).update({ status });
+        if (col === 'deposits' && status === 'approved') {
+          await db.collection('users').doc(uid).update({ wallet: firebase.firestore.FieldValue.increment(amt), totalDeposited: firebase.firestore.FieldValue.increment(amt) });
+          await db.collection('transactions').add({ userId: uid, amount: amt, type: 'credit', description: 'Deposit Approved', status: 'completed', createdAt: firebase.firestore.FieldValue.serverTimestamp() });
+        }
+        if (col === 'deposits' && status === 'rejected') {
+          await db.collection('transactions').add({ userId: uid, amount: amt, type: 'credit', description: 'Deposit Rejected', status: 'rejected', createdAt: firebase.firestore.FieldValue.serverTimestamp() });
+        }
+        if (col === 'withdrawals' && status === 'approved') {
+          await db.collection('transactions').add({ userId: uid, amount: amt, type: 'debit', description: 'Withdrawal Completed', status: 'completed', createdAt: firebase.firestore.FieldValue.serverTimestamp() });
+        }
+        if (col === 'withdrawals' && status === 'rejected') {
+          await db.collection('users').doc(uid).update({ wallet: firebase.firestore.FieldValue.increment(amt) });
+          await db.collection('transactions').add({ userId: uid, amount: amt, type: 'credit', description: 'Withdrawal Rejected - Refunded', status: 'completed', createdAt: firebase.firestore.FieldValue.serverTimestamp() });
+        }
+        showToast(`${status === 'approved' ? 'Approved' : 'Rejected'} & wallet updated!`);
+        const activeBtn = document.querySelector(`#${col === 'deposits' ? 'tab-deposits' : 'tab-withdrawals'} .filter-btn.active`);
+        loadTransactions(col, activeBtn?.dataset.status || 'pending');
+        loadStats();
+      } catch(e) { showToast('Error: ' + e.message, 'error'); }
+    };
+
+    // =========================
+    // Notifications
+    // =========================
+    document.getElementById('notify-form').onsubmit = async (e) => {
+      e.preventDefault();
+      try {
+        const target = document.getElementById('notify-target').value;
+        const targetValue = target === 'specific' ? document.getElementById('notify-uid').value : 'all';
+        await db.collection('notifications').add({
+          title: document.getElementById('notify-title').value,
+          body: document.getElementById('notify-msg').value,
+          userId: targetValue,
+          type: 'announcement',
+          isRead: false,
+          createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+          sentBy: currentAdmin.uid
+        });
+        showToast('Notification sent successfully! 🔔');
+        e.target.reset();
+        loadNotifyHistory();
+      } catch(e) { showToast('Error: ' + e.message, 'error'); }
+    };
+
+    async function loadNotifyHistory() {
+      const list = document.getElementById('notify-history-list');
+      const snap = await db.collection('notifications').orderBy('createdAt', 'desc').limit(10).get();
+      list.innerHTML = '';
+      if (snap.empty) { list.innerHTML = '<p class="text-[10px] text-slate-500 font-semibold italic">No sent notification history</p>'; return;}
+      snap.forEach(docSnap => {
+        const n = docSnap.data();
+        list.innerHTML += `
+          <div class="border-b border-slate-850 pb-2 pt-1">
+            <div class="font-extrabold text-xs text-white uppercase tracking-tight flex justify-between">
+              <span>🔔 ${n.title}</span>
+              <span class="text-[8px] font-bold text-slate-600 font-mono">${formatTime(n.createdAt)}</span>
+            </div>
+            <div class="text-[10px] text-slate-400 font-medium leading-relaxed mt-1">${n.body.slice(0, 100)}...</div>
+            <div class="text-[8px] text-indigo-400 font-black uppercase tracking-wider mt-0.5">Target: ${n.userId || 'all'}</div>
+          </div>`;
+      });
+    }
+
+    // Close modals on outside click
+    document.addEventListener('click', (e) => {
+      if (e.target.classList.contains('modal')) e.target.classList.remove('active');
+    });
+  </script>
+</body>
+</html>

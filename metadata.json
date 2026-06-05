@@ -1,0 +1,6 @@
+{
+  "name": "Hamro Tournament",
+  "description": "An premium esports arena dashboard designed for joining tournaments, viewing live match statistics, and securely managing wallets and eSewa deposits and withdrawals.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

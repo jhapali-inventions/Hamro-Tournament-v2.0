@@ -1,0 +1,165 @@
+{
+  "entities": {
+    "User": {
+      "title": "User Profile",
+      "description": "User account information, gaming stats, and wallet balances",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "email": { "type": "string" },
+        "username": { "type": "string" },
+        "wallet": { "type": "number" },
+        "esewaId": { "type": "string" },
+        "ffUid": { "type": "string" },
+        "ffIgn": { "type": "string" },
+        "ffUidLocked": { "type": "boolean" },
+        "ffIgnLocked": { "type": "boolean" },
+        "totalKills": { "type": "number" },
+        "totalDeposited": { "type": "number" },
+        "totalWinnings": { "type": "number" },
+        "totalMatches": { "type": "number" },
+        "totalWins": { "type": "number" },
+        "role": { "type": "string", "enum": ["user", "admin"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "email", "username", "wallet"]
+    },
+    "Tournament": {
+      "title": "Tournament",
+      "description": "Esports tournament detail, game entry costs, and play status",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "gameType": { "type": "string" },
+        "startTime": { "type": "string", "format": "date-time" },
+        "entryFee": { "type": "number" },
+        "prizePool": { "type": "number" },
+        "currentPlayers": { "type": "number" },
+        "maxPlayers": { "type": "number" },
+        "bannerUrl": { "type": "string" },
+        "status": { "type": "string", "enum": ["upcoming", "playing", "ended"] },
+        "rules": { "type": "string" },
+        "winnerName": { "type": "string" }
+      },
+      "required": ["title", "gameType", "entryFee", "prizePool", "currentPlayers", "maxPlayers", "status"]
+    },
+    "TournamentRegistration": {
+      "title": "Tournament Registration",
+      "description": "Mapping from User to a registered Tournament",
+      "type": "object",
+      "properties": {
+        "tournamentId": { "type": "string" },
+        "tournamentTitle": { "type": "string" },
+        "userId": { "type": "string" },
+        "userName": { "type": "string" },
+        "registeredAt": { "type": "string", "format": "date-time" },
+        "status": { "type": "string", "enum": ["registered", "played", "disqualified"] },
+        "entryFee": { "type": "number" }
+      },
+      "required": ["tournamentId", "tournamentTitle", "userId", "userName", "registeredAt", "status", "entryFee"]
+    },
+    "Transaction": {
+      "title": "Wallet Transaction",
+      "description": "Log of point debits, credits, and registration charges",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "amount": { "type": "number" },
+        "type": { "type": "string", "enum": ["credit", "debit"] },
+        "description": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "completed", "failed"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "amount", "type", "description", "status", "createdAt"]
+    },
+    "Deposit": {
+      "title": "Esewa Deposit",
+      "description": "Requested cash-in deposit waiting for admin confirmation",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "userName": { "type": "string" },
+        "amount": { "type": "number" },
+        "transactionId": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "approved", "rejected"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "amount", "transactionId", "status", "createdAt"]
+    },
+    "Withdrawal": {
+      "title": "Esewa WithdrawalRequest",
+      "description": "Requested cash-out check waiting for admin payout",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "userName": { "type": "string" },
+        "amount": { "type": "number" },
+        "esewaId": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "approved", "rejected"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "amount", "esewaId", "status", "createdAt"]
+    },
+    "Announcement": {
+      "title": "System Announcement",
+      "description": "Broad alert or rules updates broadcasted by admin",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "content": { "type": "string" },
+        "type": { "type": "string", "enum": ["update", "danger", "success", "info"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["title", "content", "type", "createdAt"]
+    },
+    "Notification": {
+      "title": "Push Notification",
+      "description": "User specific or broadcast notification message",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "title": { "type": "string" },
+        "body": { "type": "string" },
+        "type": { "type": "string", "enum": ["start", "results", "announcement", "general"] },
+        "isRead": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "referenceId": { "type": "string" }
+      },
+      "required": ["userId", "title", "body", "type", "isRead", "createdAt"]
+    }
+  },
+  "firestore": {
+    "users/{userId}": {
+      "schema": "User",
+      "description": "All system member information"
+    },
+    "tournaments/{tournamentId}": {
+      "schema": "Tournament",
+      "description": "All listed esports tournaments"
+    },
+    "tournamentRegistrations/{registrationId}": {
+      "schema": "TournamentRegistration",
+      "description": "Player bookings into lists of tournaments"
+    },
+    "transactions/{transactionId}": {
+      "schema": "Transaction",
+      "description": "All records of debits and credits"
+    },
+    "deposits/{depositId}": {
+      "schema": "Deposit",
+      "description": "eSewa cash deposits for approval"
+    },
+    "withdrawals/{withdrawalId}": {
+      "schema": "Withdrawal",
+      "description": "eSewa cash withdrawals for payout"
+    },
+    "announcements/{announcementId}": {
+      "schema": "Announcement",
+      "description": "Public system notifications"
+    },
+    "notifications/{notificationId}": {
+      "schema": "Notification",
+      "description": "User specific or public alert messages"
+    }
+  }
+}
